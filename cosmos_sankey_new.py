@@ -32,7 +32,6 @@ st.subheader('Streamlit App by [Jordi R.](https://twitter.com/RuspiTorpi/). Powe
 st.text("")
 st.markdown('Hi there. This streamlit app displays a Sankey chart showing redelegations from a selected validator to the rest of validators, starting on 2023-02-05.' )   
 
-
 st.markdown(
 			f"""
 	<style>
@@ -51,9 +50,7 @@ st.markdown(
 	""",
 			unsafe_allow_html=True,
 		) 
-pio.renderers.default = 'browser'
-
-
+pio.renderers.default = 'browser
 
 
 API_KEY = st.secrets["API_KEY"]
