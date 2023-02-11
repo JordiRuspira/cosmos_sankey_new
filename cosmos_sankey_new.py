@@ -50,7 +50,7 @@ st.markdown(
 	""",
 			unsafe_allow_html=True,
 		) 
-pio.renderers.default = 'browser
+pio.renderers.default = 'browser'
 
 
 API_KEY = st.secrets["API_KEY"]
