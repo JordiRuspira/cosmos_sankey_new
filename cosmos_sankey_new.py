@@ -4,7 +4,7 @@ Created on Tue Aug 16 00:42:24 2022
 @author: Jordi Garcia Ruspira
 """
 
-
+import datetime
 import streamlit as st
 import pandas as pd
 import requests
@@ -30,7 +30,7 @@ st.success("This app only contains a chart! Please select a validator ")
 st.text("")
 st.subheader('Streamlit App by [Jordi R.](https://twitter.com/RuspiTorpi/). Powered by Flipsidecrypto')
 st.text("")
-st.markdown('Hi there. This streamlit app displays a Sankey chart showing redelegations from a selected validator to the rest of validators, starting on 2023-02-05.' )   
+st.markdown('Hi there. This streamlit app displays a Sankey chart showing redelegations from a selected validator to the rest of validators, starting on a selected date, up until current date.' )   
 
 st.markdown(
 			f"""
@@ -56,20 +56,22 @@ pio.renderers.default = 'browser'
 API_KEY = st.secrets["API_KEY"]
 
 
-
 	  
 SQL_QUERY = """   select distinct address, label, RANK() OVER (ORDER BY delegator_shares DESC) AS RANK from cosmos.core.fact_validators 
 	 	order by rank
+         limit 300 
 """  
 
-SQL_QUERY_2 = """ 
+SQL_QUERY_2_AUX = """ 
 with table_8 as (
 select distinct tx_id from cosmos.core.fact_msg_attributes
 where tx_succeeded = 'TRUE'
 and msg_type = 'message'
 and attribute_key = 'action'
 and attribute_value = '/cosmos.staking.v1beta1.MsgBeginRedelegate'
-and to_date(block_timestamp) between '2023-02-05' and current_date 
+and to_date(block_timestamp) between '"""  
+
+SQL_QUERY_2_AUX_2 = """' and current_date
 ),
   
 table_9 as (select distinct tx_id, attribute_value as address from cosmos.core.fact_msg_attributes
@@ -95,7 +97,6 @@ where tx_succeeded = 'TRUE'
 and msg_type = 'redelegate'
 and attribute_key = 'amount'
 and tx_id in (select * from table_8)),
-
 table_13 as (
  select distinct address, label, RANK() OVER (ORDER BY delegator_shares DESC) AS RANK from cosmos.core.fact_validators 
 order by rank)
@@ -194,64 +195,71 @@ def get_query_results_2(token):
 
 	return data
 
+ 
 
-query_2 = create_query_2()
-token_2 = query_2.get('token')
-data2 = get_query_results_2(token_2) 
-df2 = pd.DataFrame(data2['results'], columns = ['FROM_VALIDATOR', 'TO_VALIDATOR','FROM_VALIDATOR_RANK','TO_VALIDATOR_RANK','AMOUNT_REDELEGATED'])
+
+with st.container():
+
+    
+    input_feature = st.date_input( "Introduce start date",  datetime.date(2023, 1, 1))    
+    # Here we create a sql query which returns the gamm amount for each pool that the wallet holds on osmosis, in percentage
+    
+    SQL_QUERY_2 = SQL_QUERY_2_AUX+ str(input_feature) + SQL_QUERY_2_AUX_2
+
+
+    query_2 = create_query_2()
+    token_2 = query_2.get('token')
+    data2 = get_query_results_2(token_2) 
+    df2 = pd.DataFrame(data2['results'], columns = ['FROM_VALIDATOR', 'TO_VALIDATOR','FROM_VALIDATOR_RANK','TO_VALIDATOR_RANK','AMOUNT_REDELEGATED'])
 
 
 	  
 
 
 
-query = create_query()
-token = query.get('token')
-data1 = get_query_results(token)
-df1 = pd.DataFrame(data1['results'], columns = ['ADDRESS', 'LABEL','RANK']) 
+    query = create_query()
+    token = query.get('token')
+    data1 = get_query_results(token)
+    df1 = pd.DataFrame(data1['results'], columns = ['ADDRESS', 'LABEL','RANK']) 
 
-randcolor = []
-for i in range(1,len(df1['LABEL']) + 1):
+    randcolor = []
+    for i in range(1,len(df1['LABEL']) + 1):
 	 
-	randcolor.append("#{:06x}".format(random.randint(0, 0xFFFFFF))) 
+        randcolor.append("#{:06x}".format(random.randint(0, 0xFFFFFF))) 
 		
-df1['COLOR'] = randcolor
+    df1['COLOR'] = randcolor
 
 
-keys_list =  df1['RANK']
-values_list = df1['LABEL']
-zip_iterator = zip(keys_list, values_list) 
-a_dictionary = dict(zip_iterator)
+    keys_list =  df1['RANK']
+    values_list = df1['LABEL']
+    zip_iterator = zip(keys_list, values_list) 
+    a_dictionary = dict(zip_iterator)
 
-df3 = pd.DataFrame(a_dictionary.items(), columns = ['RANK','LABEL'], index = keys_list)
-df3.index = df3.index
-df3 = df3.sort_index()
-
-
-with st.container():
-
-		
-	validator_choice = st.selectbox("Choose a validator", options = df2['FROM_VALIDATOR'].unique() )
+    df3 = pd.DataFrame(a_dictionary.items(), columns = ['RANK','LABEL'], index = keys_list)
+    df3.index = df3.index
+    df3 = df3.sort_index()
+    
+    validator_choice = st.selectbox("Choose a validator", options = df2['FROM_VALIDATOR'].unique())
 
 		
-	df_filtered = df2[df2['FROM_VALIDATOR'] == validator_choice]
-	df_filtered['Link color'] = 'rgba(127, 194, 65, 0.2)'
-	df_filtered['FROM_VALIDATOR_RANK'] = df_filtered['FROM_VALIDATOR_RANK']-1
-	df_filtered['TO_VALIDATOR_RANK'] = df_filtered['TO_VALIDATOR_RANK'] - 1
-
-	link = dict(source = df_filtered['FROM_VALIDATOR_RANK'].values , target = df_filtered['TO_VALIDATOR_RANK'].values, value = df_filtered['AMOUNT_REDELEGATED'], color = df1['COLOR'])
-	node = dict(label = df3['LABEL'].values, pad = 35, thickness = 10)
+    df_filtered = df2[df2['FROM_VALIDATOR'] == validator_choice]
+    df_filtered['Link color'] = 'rgba(127, 194, 65, 0.2)'
+    df_filtered['FROM_VALIDATOR_RANK'] = df_filtered['FROM_VALIDATOR_RANK']-1
+    df_filtered['TO_VALIDATOR_RANK'] = df_filtered['TO_VALIDATOR_RANK'] - 1
+    
+    link = dict(source = df_filtered['FROM_VALIDATOR_RANK'].values , target = df_filtered['TO_VALIDATOR_RANK'].values, value = df_filtered['AMOUNT_REDELEGATED'], color = df1['COLOR'])
+    node = dict(label = df3['LABEL'].values, pad = 35, thickness = 10)
 
 	 
 		
 		 
-	data = go.Sankey(link = link, node = node)
-	fig = go.Figure(data)
-	fig.update_layout(
+    data = go.Sankey(link = link, node = node)  
+    fig = go.Figure(data)
+    fig.update_layout(
 			hovermode = 'x', 
 			font = dict(size = 20, color = 'white'), 
 			paper_bgcolor= 'rgba(0,0,0,0)',
 			width=1000, height=1300
 	) 
 		
-	st.plotly_chart(fig, use_container_width=True) 
+    st.plotly_chart(fig, use_container_width=True) 
